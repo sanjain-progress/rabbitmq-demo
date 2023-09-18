@@ -3,11 +3,16 @@ package main
 import (
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/streadway/amqp"
 )
 
 func main() {
+	Start()
+}
+
+func Start() {
 	// Connect to RabbitMQ server
 	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
 	if err != nil {
@@ -39,15 +44,34 @@ func main() {
 		log.Fatalf("Failed to register a consumer: %v", err)
 	}
 
-	// Handle incoming messages
-	for msg := range msgs {
-		// Simulate message processing
-		fmt.Printf("Received: %s\n", msg.Body)
+	// External function that listens to the queue and processes messages
+	for {
+		msg, err := Dequeue(msgs)
+		if err != nil {
+			log.Printf("Error dequeuing message: %v", err)
+			continue
+		}
+
+		// Execute the function that takes 2 minutes
+		fmt.Println("Executing function that takes 2 minutes...", string(msg.Body))
+		time.Sleep(2 * time.Second)
+		fmt.Println("Function execution completed.", string(msg.Body))
 
 		// Acknowledge the message manually
-		err := msg.Ack(false)
+		err = msg.Ack(false)
 		if err != nil {
 			log.Printf("Failed to acknowledge message: %v", err)
 		}
+	}
+}
+
+// Dequeue function to retrieve a message from the channel
+func Dequeue(msgs <-chan amqp.Delivery) (amqp.Delivery, error) {
+	select {
+	case msg, ok := <-msgs:
+		if ok {
+			return msg, nil
+		}
+		return amqp.Delivery{}, fmt.Errorf("Channel closed")
 	}
 }
